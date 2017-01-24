@@ -164,7 +164,9 @@ bool Variant::canonicalize_sv(FastaReference& fasta_reference, vector<FastaRefer
                             sv_len = (size_t) abs(stol(this->info["SVLEN"][alt_pos]));
                         }
                         else if (this->info.find("END") != this->info.end()){
-                            sv_len = abs((size_t) stol(this->info["END"][alt_pos]) - (size_t) (this->position));
+                            size_t const a = stol(this->info["END"][alt_pos]);
+                            size_t const b = this->position;
+                            sv_len = labs(a - b);
                         }
                         else{
                             // If we have neither, we'll ignore it.
@@ -1110,6 +1112,26 @@ bool VariantCallFile::openVCF(ifstream& stream) {
     }
 }
 */
+
+void VariantCallFile::reset(void) {
+    if (usingTabix)
+    {
+        tabixFile->reset();
+        tabixFile->getNextLine(line);
+    }
+    else
+    {
+        file->clear();
+        file->seekg(0);
+        while (std::getline(*file, line))
+        {
+            if (line.substr(0, 1) != "#")
+                break;
+        }
+    }
+
+    firstRecord = true;
+}
 
 void VariantCallFile::updateSamples(vector<string>& newSamples) {
     sampleNames = newSamples;
@@ -2265,7 +2287,7 @@ map<int, int> glReorder(int ploidy, int numalts, map<int, int>& alleleIndexMappi
     return mapping;
 }
 
-string Variant::getGenotype(string& sample) {
+string Variant::getGenotype(string const& sample) {
     map<string, map<string, vector<string> > >::iterator s = samples.find(sample);
     if (s != samples.end()) {
         map<string, vector<string> >::iterator f = s->second.find("GT");

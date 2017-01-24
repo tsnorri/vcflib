@@ -60,7 +60,7 @@ class VariantCallFile {
 public:
 
     istream* file;
-    Tabix* tabixFile;
+    tabixpp::Tabix* tabixFile;
 
     bool usingTabix;
     string vcf_header;
@@ -88,6 +88,7 @@ public:
     void removeGenoHeaderLine(string line);
     vector<string> infoIds(void);
     vector<string> formatIds(void);
+    void reset(void);
 
     bool open(string& filename) {
         vector<string> filenameParts = split(filename, ".");
@@ -107,7 +108,7 @@ public:
 
     bool openTabix(string& filename) {
         usingTabix = true;
-        tabixFile = new Tabix(filename);
+        tabixFile = new tabixpp::Tabix(filename);
         parsedHeader = parseHeader();
         return parsedHeader;
     }
@@ -279,7 +280,7 @@ public:
     map<pair<int, int>, int> getGenotypeIndexesDiploid(void);
     int getNumSamples(void);
     int getNumValidGenotypes(void);
-    string getGenotype(string& sample);
+    string getGenotype(string const& sample);
     bool isPhased(void);
     // TODO
     //void setInfoField(string& key, string& val);
