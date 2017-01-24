@@ -181,7 +181,7 @@ bool Variant::canonicalize_sv(FastaReference& fasta_reference, vector<FastaRefer
                             }
                             else if (do_external_insertions){
                                 regex arrows("<|>");
-                                string var_name = regex_replace(this->alt[alt_pos], arrows, "");
+                                string var_name = regex_replace(this->alt[alt_pos], arrows, string(""));
                                 if (insertion_fasta->index->find(var_name) != insertion_fasta->index->end()){
                                     this->ref.assign(fasta_reference.getSubSequence(this->sequenceName, this->position, 1 ));
                                 #ifdef DEBUG
