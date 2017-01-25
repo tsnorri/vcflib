@@ -14,7 +14,14 @@ using namespace vcflib;
 #define ALLELE_NULL -1
 
 
-class SampleFastaFile {
+struct OutputFile {
+    virtual ~OutputFile() {}
+    virtual void open(string const &filename, string const &seqname) = 0;
+    virtual void write(string const &seq) = 0;
+};
+
+
+class SampleFastaFile : public OutputFile {
 
 public:
 
@@ -25,7 +32,7 @@ public:
     string seqname;
     int linewidth;
 
-    void write(string sequence) {
+    void write(string const& sequence) {
         linebuffer += sequence;
         while (linebuffer.length() > linewidth) {
             fastafile << linebuffer.substr(0, linewidth) << endl;
@@ -35,7 +42,11 @@ public:
 
     SampleFastaFile(void) { }
 
-    void open(string& m_filename, string& m_seqname, int m_linewidth = 80) {
+    void open(string const &filename, string const &seqname) {
+        open(filename, seqname, 80);
+    }
+
+    void open(string const& m_filename, string const& m_seqname, int m_linewidth) {
         filename = m_filename;
         seqname = m_seqname;
         pos = 0;
@@ -59,6 +70,36 @@ public:
 
 };
 
+
+class AlignmentFile : public OutputFile {
+
+protected:
+    ofstream stream;
+
+    void open(string const& filename, string const& seqname) {
+        if (stream.is_open())
+            stream.close();
+
+        stream.open(filename);
+        if (!stream.is_open()) {
+            cerr << "could not open " << filename << " for writing, exiting" << endl;
+            exit(1);
+        }
+    }
+
+    void write(string const& seq) {
+        stream << seq;
+    }
+
+    ~AlignmentFile(void) {
+        if (stream.is_open()) {
+            stream << flush;
+            stream.close();
+        }
+    }
+};
+
+
 void printSummary(char** argv) {
     cerr << "usage: " << argv[0] << " [options] [file]" << endl
          << endl
@@ -66,6 +107,7 @@ void printSummary(char** argv) {
          << "    -f, --reference REF     Use this reference when decomposing samples." << endl
          << "    -p, --prefix PREFIX     Affix this output prefix to each file, none by default" << endl
          << "    -P, --default-ploidy N  Set a default ploidy for samples which do not have information in the first record (2)." << endl
+         << "    -g, --gaps              Output gaps, omit the FASTA header and set file extension to .txt." << endl
          << endl
          << "Outputs sample_seq:N.fa for each sample, reference sequence, and chromosomal copy N in [0,1... ploidy]." << endl;
         //<< "Impossible regions of haplotypes are noted with an error message.  The corresponding" << endl
@@ -82,7 +124,7 @@ map<string, int>& getPloidies(Variant& var, map<string, int>& ploidies, int defa
     return ploidies;
 }
 
-void closeOutputs(map<string, map<int, SampleFastaFile*> >& outputs) {
+void closeOutputs(map<string, map<int, OutputFile*> >& outputs) {
     for (auto &vPair : outputs)
     {
         for (auto &mPair : vPair.second)
@@ -92,27 +134,32 @@ void closeOutputs(map<string, map<int, SampleFastaFile*> >& outputs) {
 }
 
 template <typename T>
-void initOutputs(map<string, map<int, SampleFastaFile*> >& outputs, T const &sampleNames, string& seqName, map<string, int>& ploidies, string& prefix) {
+void initOutputs(map<string, map<int, OutputFile*> >& outputs, T const &sampleNames, string& seqName, map<string, int>& ploidies, string const& prefix, string const& suffix, bool outputFasta) {
     closeOutputs(outputs);
     for (auto const &sample : sampleNames)
     {
-        map<int, SampleFastaFile*>& outs = outputs[sample];
+        map<int, OutputFile*>& outs = outputs[sample];
         int p = ploidies[sample];
         for (int i = 0; i < p; ++i) {
-            string name = prefix + sample + "_" + seqName + ":" + convert(i) + ".fasta";
+            string name = prefix + sample + "_" + seqName + ":" + convert(i) + suffix;
             if (!outs[i]) {
-                SampleFastaFile* fp = new SampleFastaFile;
+                OutputFile* fp = nullptr;
+                if (outputFasta)
+                    fp = new SampleFastaFile;
+                else
+                    fp = new AlignmentFile;
+
                 outs[i] = fp;
             }
-            SampleFastaFile& f = *outs[i];
+            OutputFile& f = *outs[i];
             f.open(name, seqName);
         }
     }
 }
 
-void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& outputPrefix, int defaultPloidy, string& nullAlleleString) {
+void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& outputPrefix, int defaultPloidy, string& nullAlleleString, bool outputGaps) {
     string lastSeq;
-    map<string, map<int, SampleFastaFile*> > outputs;
+    map<string, map<int, OutputFile*> > outputs;
     Variant var(variantFile);
     map<string, int> lastPloidies;
     
@@ -140,14 +187,12 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
             if (var.sequenceName != lastSeq || lastSeq.empty()) {
                 if (!lastSeq.empty()) {
                     string ref5prime = reference.getSubSequence(lastSeq, lastEnd, reference.sequenceLength(lastSeq)-lastEnd);
-                    for (map<string, map<int, SampleFastaFile*> >::iterator s = outputs.begin(); s != outputs.end(); ++s) {
-                        map<int, SampleFastaFile*>& f = s->second;
-                        for (map<int, SampleFastaFile*>::iterator o = f.begin(); o != f.end(); ++o) {
-                            o->second->write(ref5prime);
-                        }
+                    for (auto &mPair : outputs) {
+                        for (auto &pair : mPair.second)
+                            pair.second->write(ref5prime);
                     }
                 }
-                initOutputs(outputs, currentSamples, var.sequenceName, ploidies, outputPrefix);
+                initOutputs(outputs, currentSamples, var.sequenceName, ploidies, outputPrefix, (outputGaps ? ".txt" : ".fa"), !outputGaps);
                 lastSeq = var.sequenceName;
                 lastPos = 0;
             } else if (!lastPloidies.empty() && lastPloidies != ploidies) {
@@ -168,6 +213,10 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                 ref5prime = reference.getSubSequence(var.sequenceName, lastEnd, var.position - 1 - lastEnd);
             }
             // write alt/ref seqs for current variant based on phased genotypes
+            size_t maxLength = nullAlleleString.size();
+            for (auto const &allele : var.alleles)
+                maxLength = std::max(maxLength, ref5prime.size() + allele.size());
+
             for (auto const &sample : currentSamples) {
                 vector<int> gt = decomposePhasedGenotype(var.getGenotype(sample));
                 // assume no-call == ref?
@@ -184,10 +233,25 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                             cerr << "use -n option to set value to output for missing calls" << endl; 
                             exit(1);
                         }else{
-                            outputs[sample].at(i)->write(nullAlleleString);
+                            auto &file = *outputs[sample].at(i);
+                            file.write(nullAlleleString);
+                            if (outputGaps)
+                            {
+                                for (size_t j = 0; j < maxLength - nullAlleleString.size(); ++j)
+                                    file.write("-");
+                            }
                         }
-                    }else{
-                        outputs[sample].at(i)->write(ref5prime+var.alleles.at(*g));
+                    } else {
+                        auto &file = *outputs[sample].at(i);
+                        auto const &allele = var.alleles.at(*g);
+                        file.write(ref5prime);
+                        file.write(allele);
+                        if (outputGaps)
+                        {
+                            size_t writtenLength = ref5prime.size() + allele.size();
+                            for (size_t j = 0; j < maxLength - writtenLength; ++j)
+                                file.write("-");
+                        }
                     }
                 }
             }
@@ -197,15 +261,13 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
         // write last sequences
         {
             string ref5prime = reference.getSubSequence(lastSeq, lastEnd, reference.sequenceLength(lastSeq)-lastEnd);
-            for (map<string, map<int, SampleFastaFile*> >::iterator s = outputs.begin(); s != outputs.end(); ++s) {
-                map<int, SampleFastaFile*>& f = s->second;
-                for (map<int, SampleFastaFile*>::iterator o = f.begin(); o != f.end(); ++o) {
-                    o->second->write(ref5prime);
-                }
+            for (auto &mPair : outputs) {
+                for (auto &pair : mPair.second)
+                    pair.second->write(ref5prime);
             }
         }
         closeOutputs(outputs);
-        // outputs are closed by ~SampleFastaFile
+        // outputs are closed by destructor.
     }
 }
 
@@ -216,6 +278,7 @@ int main(int argc, char** argv) {
     int defaultPloidy;
     string outputPrefix;
     string nullAlleleString;
+    bool outputGaps = false;
 
     int c;
     while (true) {
@@ -228,12 +291,13 @@ int main(int argc, char** argv) {
                 {"prefix", required_argument, 0, 'p'},
                 {"default-ploidy", required_argument, 0, 'P'},
                 {"no-call-string", required_argument, 0, 'n'},
+                {"gaps", no_argument, 0, 'g'},
                 {0, 0, 0, 0}
             };
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "hmf:p:P:n:",
+        c = getopt_long (argc, argv, "hmf:p:P:n:g",
                          long_options, &option_index);
 
         if (c == -1)
@@ -259,6 +323,10 @@ int main(int argc, char** argv) {
 
 	    case 'n':
             nullAlleleString = optarg;
+            break;
+
+        case 'g':
+            outputGaps = true;
             break;
 
         case '?':
@@ -290,7 +358,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    vcf2fasta(variantFile, reference, outputPrefix, defaultPloidy, nullAlleleString);
+    vcf2fasta(variantFile, reference, outputPrefix, defaultPloidy, nullAlleleString, outputGaps);
 
     return 0;
 
