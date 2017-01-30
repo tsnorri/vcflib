@@ -167,21 +167,33 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
     auto const &allSamples = variantFile.sampleNames;
     size_t chunkSize = 200;
     set<string> currentSamples;
+    long int nextAvailPos = 0;
     for (size_t i = 0, count = allSamples.size(); i < count; i += chunkSize)
     {
         long int lastPos=0, lastEnd=0;
-        currentSamples.clear();
         lastSeq.clear();
+
+        // Update currentSamples.
+        currentSamples.clear();
         auto begin = allSamples.cbegin() + i;
         auto end = allSamples.cbegin() + std::min(i + chunkSize, count);
         std::copy(begin, end, std::inserter(currentSamples, currentSamples.end()));
 
+        // Move to the beginning of the variant file.
         variantFile.reset();
         while (variantFile.getNextVariant(var)) {
             if (!var.isPhased()) {
                 cerr << "variant " << var.sequenceName << ":" << var.position << " is not phased, cannot convert to fasta" << endl;
                 exit(1);
             }
+
+            if (! (nextAvailPos <= var.position)) {
+                cerr << "variant " << var.sequenceName << ":" << var.position << " overlaps with the previous variant." << endl;
+            }
+
+            // Update nextAvailPos s.t. the next variant may not overlap the reference string.
+            nextAvailPos = var.position + var.ref.size();
+
             map<string, int> ploidies;
             getPloidies(var, ploidies, defaultPloidy);
             if (var.sequenceName != lastSeq || lastSeq.empty()) {
