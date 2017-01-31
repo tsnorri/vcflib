@@ -21,6 +21,9 @@ struct OutputFile {
 };
 
 
+typedef map<string, map<int, OutputFile*> > OutputFileMap;
+
+
 class SampleFastaFile : public OutputFile {
 
 public:
@@ -104,10 +107,11 @@ void printSummary(char** argv) {
     cerr << "usage: " << argv[0] << " [options] [file]" << endl
          << endl
          << "options:" << endl
-         << "    -f, --reference REF     Use this reference when decomposing samples." << endl
-         << "    -p, --prefix PREFIX     Affix this output prefix to each file, none by default" << endl
-         << "    -P, --default-ploidy N  Set a default ploidy for samples which do not have information in the first record (2)." << endl
-         << "    -g, --gaps              Output gaps, omit the FASTA header and set file extension to .txt." << endl
+         << "    -f, --reference REF         Use this reference when decomposing samples." << endl
+         << "    -p, --prefix PREFIX         Affix this output prefix to each file, none by default" << endl
+         << "    -P, --default-ploidy N      Set a default ploidy for samples which do not have information in the first record (2)." << endl
+         << "    -g, --gaps                  Output gaps, omit the FASTA header and set file extension to .txt." << endl
+         << "    -R, --output-reference NAME Output also the reference sequence with the given sample name." << endl
          << endl
          << "Outputs sample_seq:N.fa for each sample, reference sequence, and chromosomal copy N in [0,1... ploidy]." << endl;
         //<< "Impossible regions of haplotypes are noted with an error message.  The corresponding" << endl
@@ -124,7 +128,7 @@ map<string, int>& getPloidies(Variant& var, map<string, int>& ploidies, int defa
     return ploidies;
 }
 
-void closeOutputs(map<string, map<int, OutputFile*> >& outputs) {
+void closeOutputs(OutputFileMap& outputs) {
     for (auto &vPair : outputs)
     {
         for (auto &mPair : vPair.second)
@@ -134,8 +138,9 @@ void closeOutputs(map<string, map<int, OutputFile*> >& outputs) {
 }
 
 template <typename T>
-void initOutputs(map<string, map<int, OutputFile*> >& outputs, T const &sampleNames, string& seqName, map<string, int>& ploidies, string const& prefix, string const& suffix, bool outputFasta) {
+void initOutputs(OutputFileMap& outputs, T const &sampleNames, string& seqName, map<string, int>& ploidies, string const& prefix, string const& suffix, bool outputFasta) {
     closeOutputs(outputs);
+
     for (auto const &sample : sampleNames)
     {
         map<int, OutputFile*>& outs = outputs[sample];
@@ -157,11 +162,13 @@ void initOutputs(map<string, map<int, OutputFile*> >& outputs, T const &sampleNa
     }
 }
 
-void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& outputPrefix, int defaultPloidy, string& nullAlleleString, bool outputGaps) {
+
+void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& outputPrefix, int defaultPloidy, string& nullAlleleString, string const &refName, bool outputGaps) {
     string lastSeq;
-    map<string, map<int, OutputFile*> > outputs;
+    OutputFileMap outputs;
     Variant var(variantFile);
     map<string, int> lastPloidies;
+    bool outputRef = ("" != refName);
     
     // Handle samples in chunks.
     auto const &allSamples = variantFile.sampleNames;
@@ -204,7 +211,14 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                             pair.second->write(ref5prime);
                     }
                 }
+
+                if (outputRef) {
+                    currentSamples.insert(refName);
+                    ploidies[refName] = 1;
+                }
+
                 initOutputs(outputs, currentSamples, var.sequenceName, ploidies, outputPrefix, (outputGaps ? ".txt" : ".fa"), !outputGaps);
+
                 lastSeq = var.sequenceName;
                 lastPos = 0;
             } else if (!lastPloidies.empty() && lastPloidies != ploidies) {
@@ -229,7 +243,20 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
             for (auto const &allele : var.alleles)
                 maxLength = std::max(maxLength, ref5prime.size() + allele.size());
 
-            for (auto const &sample : currentSamples) {
+            if (outputRef) {
+                auto &file = *outputs[refName].at(0);
+                file.write(ref5prime);
+                file.write(var.ref);
+                if (outputGaps)
+                {
+                    size_t writtenLength = ref5prime.size() + var.ref.size();
+                    for (size_t j = 0; j < maxLength - writtenLength; ++j)
+                        file.write("-");
+                }
+            }
+
+            for (auto const &sample : currentSamples)
+            {
                 vector<int> gt = decomposePhasedGenotype(var.getGenotype(sample));
                 // assume no-call == ref?
                 if (gt.empty()) {
@@ -267,6 +294,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                     }
                 }
             }
+
             lastPos = var.position - 1;
             lastEnd = lastPos + var.ref.size();
         }
@@ -280,6 +308,8 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
         }
         closeOutputs(outputs);
         // outputs are closed by destructor.
+
+        outputRef = false;
     }
 }
 
@@ -290,6 +320,7 @@ int main(int argc, char** argv) {
     int defaultPloidy;
     string outputPrefix;
     string nullAlleleString;
+    string refName;
     bool outputGaps = false;
 
     int c;
@@ -304,12 +335,13 @@ int main(int argc, char** argv) {
                 {"default-ploidy", required_argument, 0, 'P'},
                 {"no-call-string", required_argument, 0, 'n'},
                 {"gaps", no_argument, 0, 'g'},
+                {"output-reference", required_argument, 0, 'R'},
                 {0, 0, 0, 0}
             };
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "hmf:p:P:n:g",
+        c = getopt_long (argc, argv, "hmf:p:P:n:gR:",
                          long_options, &option_index);
 
         if (c == -1)
@@ -341,6 +373,10 @@ int main(int argc, char** argv) {
             outputGaps = true;
             break;
 
+        case 'R':
+            refName = optarg;
+            break;
+
         case '?':
             printSummary(argv);
             exit(1);
@@ -370,7 +406,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    vcf2fasta(variantFile, reference, outputPrefix, defaultPloidy, nullAlleleString, outputGaps);
+    vcf2fasta(variantFile, reference, outputPrefix, defaultPloidy, nullAlleleString, refName, outputGaps);
 
     return 0;
 
