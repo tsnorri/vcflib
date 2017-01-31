@@ -203,6 +203,9 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
 
             map<string, int> ploidies;
             getPloidies(var, ploidies, defaultPloidy);
+            if (outputRef)
+                ploidies[refName] = 1;
+
             if (var.sequenceName != lastSeq || lastSeq.empty()) {
                 if (!lastSeq.empty()) {
                     string ref5prime = reference.getSubSequence(lastSeq, lastEnd, reference.sequenceLength(lastSeq)-lastEnd);
@@ -212,12 +215,17 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                     }
                 }
 
-                if (outputRef) {
-                    currentSamples.insert(refName);
-                    ploidies[refName] = 1;
-                }
+                {
+                    // Add refName to samples for initOutputs to open the corresponding file.
+                    auto it = currentSamples.end();
+                    if (outputRef)
+                        it = currentSamples.insert(refName).first;
 
-                initOutputs(outputs, currentSamples, var.sequenceName, ploidies, outputPrefix, (outputGaps ? ".txt" : ".fa"), !outputGaps);
+                    initOutputs(outputs, currentSamples, var.sequenceName, ploidies, outputPrefix, (outputGaps ? ".txt" : ".fa"), !outputGaps);
+
+                    if (outputRef)
+                        currentSamples.erase(it);
+                }
 
                 lastSeq = var.sequenceName;
                 lastPos = 0;
@@ -264,14 +272,14 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                     exit(1);
                 }
                 int i = 0;
-                for (vector<int>::iterator g = gt.begin(); g != gt.end(); ++g, ++i) {
+                for (auto const g : gt) {
                     // @TCC handle uncalled genotypes (*g == NULL_ALLELE)
-                    if( *g == NULL_ALLELE ){
-                        if( nullAlleleString == "" ){
+                    if (g == NULL_ALLELE) {
+                        if (nullAlleleString == "") {
                             cerr << "empty genotype call for sample " << sample << " at " << var.sequenceName << ":" << var.position << endl;
                             cerr << "use -n option to set value to output for missing calls" << endl; 
                             exit(1);
-                        }else{
+                        } else {
                             auto &file = *outputs[sample].at(i);
                             file.write(nullAlleleString);
                             if (outputGaps)
@@ -282,7 +290,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                         }
                     } else {
                         auto &file = *outputs[sample].at(i);
-                        auto const &allele = var.alleles.at(*g);
+                        auto const &allele = var.alleles.at(g);
                         file.write(ref5prime);
                         file.write(allele);
                         if (outputGaps)
@@ -292,6 +300,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                                 file.write("-");
                         }
                     }
+                    ++i;
                 }
             }
 
