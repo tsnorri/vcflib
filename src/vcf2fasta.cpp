@@ -196,6 +196,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
 
             if (! (nextAvailPos <= var.position)) {
                 cerr << "variant " << var.sequenceName << ":" << var.position << " overlaps with the previous variant." << endl;
+                //continue;
             }
 
             // Update nextAvailPos s.t. the next variant may not overlap the reference string.
