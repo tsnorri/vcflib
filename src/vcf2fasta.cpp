@@ -169,36 +169,81 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
     Variant var(variantFile);
     map<string, int> lastPloidies;
     bool outputRef = ("" != refName);
+
+    // Check that the VCF file is phased.
+    variantFile.reset();
+    while (variantFile.getNextVariant(var)) {
+        if (!var.isPhased()) {
+            cerr << "variant " << var.sequenceName << ":" << var.position << " is not phased, cannot convert to fasta" << endl;
+            exit(1);
+        }
+    }
     
     // Handle samples in chunks.
     auto const &allSamples = variantFile.sampleNames;
-    size_t chunkSize = 200;
+    size_t const chunkSize = 200;
     set<string> currentSamples;
-    for (size_t i = 0, count = allSamples.size(); i < count; i += chunkSize)
-    {
-        long int lastPos = 0, lastEnd = 0;
+    vector<string> queuedSamples;
+    auto begin = allSamples.cbegin();
+    auto const end = allSamples.cend();
+    auto const sampleCount = allSamples.size();
+
+    while (begin != end && 0 < queuedSamples.size()) {
         lastSeq.clear();
 
         // Update currentSamples.
+        // First, insert queued samples.
         currentSamples.clear();
-        auto begin = allSamples.cbegin() + i;
-        auto end = allSamples.cbegin() + std::min(i + chunkSize, count);
-        std::copy(begin, end, std::inserter(currentSamples, currentSamples.end()));
+        currentSamples.insert(std::make_move_iterator(queuedSamples.begin()), std::make_move_iterator(queuedSamples.end()));
 
-        // Move to the beginning of the variant file.
+        // Next, add up to chunkSize items from allSamples.
+        for (size_t i = 0; i < chunkSize - currentSamples.size(); ++i) {
+            if (begin == end)
+                break;
+
+            // allSamples is const, so copy.
+            currentSamples.insert(*begin++);
+        }
+
+        // Move overlapping variants to a queue.
+        {
+            long int lastPos = 0, lastEnd = 0;
+            variantFile.reset();
+            while (variantFile.getNextVariant(var)) {
+                if (var.position < lastEnd) {
+                    // Remove samples listed in the current variant.
+                    for (auto const &sample : var.sampleNames) {
+                        currentSamples.erase(sample);
+                    }
+
+                    // Check that there are still samples left.
+                    if (0 == currentSamples.size()) {
+                        cerr << "No samples left after checking for overlapping variants in " << var.sequenceName << ":" << var.position << "." << std::endl;
+                        cerr << "Variant samples:" << std::endl;
+                        for (auto const &sample : var.sampleNames)
+                            std::cerr << "\t" << sample << std::endl;
+
+                        cerr << "All queued samples:" << std::endl;
+                        for (auto const &sample : queuedSamples)
+                            std::cerr << "\t" << sample << std::endl;
+
+                        exit(1);
+                    }
+                }
+
+                lastPos = var.position - 1;
+                lastEnd = lastPos + var.ref.size();
+            }
+        }
+
+        // Output the sequences of the remaining samples.
+        long int lastPos = 0, lastEnd = 0;
+        lastSeq.clear();
+
         variantFile.reset();
         while (variantFile.getNextVariant(var)) {
-            if (!var.isPhased()) {
-                cerr << "variant " << var.sequenceName << ":" << var.position << " is not phased, cannot convert to fasta" << endl;
-                exit(1);
-            }
-
-            if (var.position < lastEnd) {
-                cerr << var.position << " vs " << lastEnd << endl;
-                cerr << "overlapping or out-of-order variants at " << var.sequenceName << ":" << var.position << " (lastSeq was " << lastSeq << ")" << endl;
-                continue;
-                //exit(1);
-            }
+            if (! (var.position < lastEnd))
+                throw std::runtime_error("Overlapping samples should have been removed.");
 
             map<string, int> ploidies;
             getPloidies(var, ploidies, defaultPloidy);
@@ -301,6 +346,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
             lastPos = var.position - 1;
             lastEnd = lastPos + var.ref.size();
         }
+
         // write last sequences
         {
             string ref5prime = reference.getSubSequence(lastSeq, lastEnd, reference.sequenceLength(lastSeq)-lastEnd);
