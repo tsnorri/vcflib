@@ -174,10 +174,9 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
     auto const &allSamples = variantFile.sampleNames;
     size_t chunkSize = 200;
     set<string> currentSamples;
-    long int nextAvailPos = 0;
     for (size_t i = 0, count = allSamples.size(); i < count; i += chunkSize)
     {
-        long int lastPos=0, lastEnd=0;
+        long int lastPos = 0, lastEnd = 0, nextAvailPos = 0;
         lastSeq.clear();
 
         // Update currentSamples.
