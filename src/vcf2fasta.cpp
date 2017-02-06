@@ -176,7 +176,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
     set<string> currentSamples;
     for (size_t i = 0, count = allSamples.size(); i < count; i += chunkSize)
     {
-        long int lastPos = 0, lastEnd = 0, nextAvailPos = 0;
+        long int lastPos = 0, lastEnd = 0;
         lastSeq.clear();
 
         // Update currentSamples.
@@ -192,14 +192,6 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                 cerr << "variant " << var.sequenceName << ":" << var.position << " is not phased, cannot convert to fasta" << endl;
                 exit(1);
             }
-
-            if (! (nextAvailPos <= var.position)) {
-                cerr << "variant " << var.sequenceName << ":" << var.position << " overlaps with the previous variant." << endl;
-                continue;
-            }
-
-            // Update nextAvailPos s.t. the next variant may not overlap the reference string.
-            nextAvailPos = var.position + var.ref.size();
 
             map<string, int> ploidies;
             getPloidies(var, ploidies, defaultPloidy);
@@ -238,7 +230,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
             lastPloidies = ploidies;
             if (var.position < lastEnd) {
                 cerr << var.position << " vs " << lastEnd << endl;
-                cerr << "overlapping or out-of-order variants at " << var.sequenceName << ":" << var.position << endl;
+                cerr << "overlapping or out-of-order variants at " << var.sequenceName << ":" << var.position << " (lastSeq was " << lastSeq << ")" << endl;
                 exit(1);
             }
             // get reference sequences implied by last->current variant
