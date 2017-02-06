@@ -193,6 +193,13 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                 exit(1);
             }
 
+            if (var.position < lastEnd) {
+                cerr << var.position << " vs " << lastEnd << endl;
+                cerr << "overlapping or out-of-order variants at " << var.sequenceName << ":" << var.position << " (lastSeq was " << lastSeq << ")" << endl;
+                continue;
+                //exit(1);
+            }
+
             map<string, int> ploidies;
             getPloidies(var, ploidies, defaultPloidy);
             if (outputRef)
@@ -228,11 +235,6 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                 exit(1);
             }
             lastPloidies = ploidies;
-            if (var.position < lastEnd) {
-                cerr << var.position << " vs " << lastEnd << endl;
-                cerr << "overlapping or out-of-order variants at " << var.sequenceName << ":" << var.position << " (lastSeq was " << lastSeq << ")" << endl;
-                exit(1);
-            }
             // get reference sequences implied by last->current variant
             string ref5prime;
             if (var.position - 1 - lastEnd > 0) {
