@@ -188,7 +188,10 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
     auto const end = allSamples.cend();
     auto const sampleCount = allSamples.size();
 
-    while (begin != end && 0 < queuedSamples.size()) {
+    size_t round = 0;
+    while (begin != end || 0 < queuedSamples.size()) {
+        ++round;
+        std::cerr << "Round " << round << std::endl;
         lastSeq.clear();
 
         // Update currentSamples.
@@ -213,6 +216,8 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
                 if (var.position < lastEnd) {
                     // Remove samples listed in the current variant.
                     for (auto const &sample : var.sampleNames) {
+                        //std::cerr << "Queueing '" << sample << "' (var.position: " << var.position << ", lastEnd: " << lastEnd << ')' << std::endl;
+                        queuedSamples.push_back(sample);
                         currentSamples.erase(sample);
                     }
 
@@ -233,6 +238,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
 
                 lastPos = var.position - 1;
                 lastEnd = lastPos + var.ref.size();
+                //std::cerr << "lastEnd: " << lastEnd << std::endl;
             }
         }
 
@@ -242,7 +248,7 @@ void vcf2fasta(VariantCallFile& variantFile, FastaReference& reference, string& 
 
         variantFile.reset();
         while (variantFile.getNextVariant(var)) {
-            if (! (var.position < lastEnd))
+            if (var.position < lastEnd)
                 throw std::runtime_error("Overlapping samples should have been removed.");
 
             map<string, int> ploidies;
