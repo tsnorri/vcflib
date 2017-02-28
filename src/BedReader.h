@@ -14,7 +14,7 @@
 
 std::string strip(std::string const& str, char const* separators = " \t") {
     std::string::size_type const first = str.find_first_not_of(separators);
-    return (first == std::string::npos) ? string()
+    return (first == std::string::npos) ? std::string()
         : str.substr(first, str.find_last_not_of(separators) - first + 1);
 }
 
@@ -27,19 +27,19 @@ void parseRegion(
     size_t foundFirstColon = region.find(":");
 
     // we only have a single string, use the whole sequence as the target
-    if (foundFirstColon == string::npos) {
+    if (foundFirstColon == std::string::npos) {
         startSeq = region;
         startPos = 0;
         stopPos = -1;
     } else {
         startSeq = region.substr(0, foundFirstColon);
-        string sep = "..";
+        std::string sep = "..";
         size_t foundRangeSep = region.find(sep, foundFirstColon);
-        if (foundRangeSep == string::npos) {
+        if (foundRangeSep == std::string::npos) {
             sep = "-";
             foundRangeSep = region.find("-", foundFirstColon);
         }
-        if (foundRangeSep == string::npos) {
+        if (foundRangeSep == std::string::npos) {
             startPos = atoi(region.substr(foundFirstColon + 1).c_str());
             // differ from bamtools in this regard, in that we process only
             // the specified position if a range isn't given
@@ -98,7 +98,7 @@ public:
         std::vector<BedTarget> entries;
 
         if (!isOpen()) {
-            cerr << "bed targets file is not open" << endl;
+            std::cerr << "bed targets file is not open" << std::endl;
             exit(1);
         }
 

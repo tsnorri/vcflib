@@ -1,6 +1,8 @@
 #include "Variant.h"
 #include <utility>
 
+using namespace std;
+
 namespace vcflib {
 
 void Variant::parse(string& line, bool parseSamples) {

@@ -9,6 +9,7 @@
 #include <getopt.h>
 
 using namespace vcflib;
+using namespace std;
 
 int main(int argc, char** argv) {
 

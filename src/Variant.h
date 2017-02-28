@@ -353,7 +353,7 @@ inline int priority(const RuleToken& token) {
         case ( RuleToken::OR_OPERATOR )           : return 3;
         case ( RuleToken::LEFT_PARENTHESIS )      : return 0;
         case ( RuleToken::RIGHT_PARENTHESIS )     : return 0;
-        default: cerr << "invalid token type" << endl; exit(1);
+        default: std::cerr << "invalid token type" << std::endl; exit(1);
     }
 }
 
@@ -430,7 +430,7 @@ inline bool isVariable(const RuleToken& token) {
     return isNumeric(token) || isString(token) || isBoolean(token);
 }
 
-void tokenizeFilterSpec(std::string& filterspec, stack<RuleToken>& tokens, map<std::string, VariantFieldType>& variables);
+void tokenizeFilterSpec(std::string& filterspec, std::stack<RuleToken>& tokens, std::map<std::string, VariantFieldType>& variables);
 
 
 class VariantFilter {
@@ -569,7 +569,7 @@ private:
      * the maps we're going to be using will be case-insensitive
      * so that "fileFormat" and "fileformat" hash to the same item.
      */
-    struct stringcasecmp : binary_function<std::string, std::string, bool> {
+    struct stringcasecmp : std::binary_function<std::string, std::string, bool> {
         struct charcasecmp : public std::binary_function<unsigned char, unsigned char, bool> {
             bool operator() (const unsigned char& c1, const unsigned char& c2) const {
                 return tolower (c1) < tolower (c2); 
@@ -584,7 +584,7 @@ private:
     std::map<std::string, std::string, stringcasecmp> header_lines; 
 
     // contains all the ##_types_ as keys, the value is a vector of ##_type_ (since there can be duplicate #INFO for example, duplicate ids are not allowed)
-    std::map<std::string, vector<std::string>, stringcasecmp> header_lists; 
+    std::map<std::string, std::vector<std::string>, stringcasecmp> header_lists; 
 
 };
 
