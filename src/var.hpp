@@ -12,16 +12,14 @@
 #include <stdlib.h>
 #include "split.h"
 
-using namespace std;
-
 class zvar{
 public:
 
-  string name;
+  std::string name;
 
   int npop;
   
-  string seqid;
+  std::string seqid;
   long int pos;
 
   double nalt ;
@@ -31,10 +29,10 @@ public:
   double alpha; 
   double beta ;
 
-  virtual void loadPop(vector< map< string, vector<string> > >& group, string seqid, long int position) = 0;
+  virtual void loadPop(std::vector< std::map< std::string, std::vector<std::string> > >& group, std::string seqid, long int position) = 0;
   virtual void estimatePosterior() = 0 ;
   virtual ~zvar() = 0;
-  void setPopName(string  popName);
+  void setPopName(std::string  popName);
   
 };
 
@@ -49,13 +47,13 @@ public:
   double fis  ;
   double hfrq ;
   
-  vector<int> genoIndex;
-  vector<string> gts ;
-  vector< vector < double > > genoLikelihoods;
-  vector< vector < double > > genoLikelihoodsCDF;
+  std::vector<int> genoIndex;
+  std::vector<std::string> gts ;
+  std::vector< std::vector < double > > genoLikelihoods;
+  std::vector< std::vector < double > > genoLikelihoodsCDF;
 
-  virtual double unphred(map< string, vector<string> > & geno, int index) = 0; 
-  virtual void loadPop(vector< map< string, vector<string> > >& group, string seqid, long int position);
+  virtual double unphred(std::map< std::string, std::vector<std::string> > & geno, int index) = 0; 
+  virtual void loadPop(std::vector< std::map< std::string, std::vector<std::string> > >& group, std::string seqid, long int position);
   virtual ~genotype() = 0;
   void estimatePosterior();
   
@@ -68,11 +66,11 @@ public:
   double ntot  ;
   double afsum ; 
     
-  vector<double> nalts;
-  vector<double> nrefs;
-  vector<double> afs  ; 
+  std::vector<double> nalts;
+  std::vector<double> nrefs;
+  std::vector<double> afs  ; 
 
-  void loadPop(vector< map< string, vector<string> > >& group, string seqid, long int position);
+  void loadPop(std::vector< std::map< std::string, std::vector<std::string> > >& group, std::string seqid, long int position);
   void estimatePosterior();
 
   ~pooled();
@@ -86,21 +84,21 @@ public:
 class gt : public genotype{
 public:
   gt(void);
-  double unphred(map< string, vector<string> > & geno, int index);
+  double unphred(std::map< std::string, std::vector<std::string> > & geno, int index);
   ~gt();
 };
 
 class gl : public genotype{
 public:
   gl(void);
-  double unphred(map< string, vector<string> > & geno, int index);
+  double unphred(std::map< std::string, std::vector<std::string> > & geno, int index);
   ~gl();
 };
 
 class gp : public genotype{
 public:
   gp(void);
-  double unphred(map< string, vector<string> > & geno, int index);
+  double unphred(std::map< std::string, std::vector<std::string> > & geno, int index);
   ~gp();
 };
 
@@ -108,7 +106,7 @@ public:
 class pl : public genotype{
 public:
   pl(void);
-  double unphred(map< string, vector<string> > & geno, int index);
+  double unphred(std::map< std::string, std::vector<std::string> > & geno, int index);
   ~pl();
 }; 
 

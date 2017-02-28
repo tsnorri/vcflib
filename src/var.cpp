@@ -1,6 +1,8 @@
 
 #include "var.hpp"
 
+using namespace std;
+
 genotype::~genotype(){}
 
 zvar::~zvar(){}
