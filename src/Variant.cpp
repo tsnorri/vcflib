@@ -2314,7 +2314,7 @@ bool Variant::isPhased(void) {
     return true;
 }
 
-long Variant::zeroBasedPosition(void) {
+long Variant::zeroBasedPosition(void) const {
     return position - 1;
 }
 

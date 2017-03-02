@@ -193,7 +193,7 @@ public:
 
     std::string sequenceName;
     long position;
-    long zeroBasedPosition(void);
+    long zeroBasedPosition(void) const;
     std::string id;
     std::string ref;
     std::vector<std::string> alt;      // a list of all the alternate alleles present at this locus
